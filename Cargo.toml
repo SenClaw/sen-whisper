@@ -1,0 +1,69 @@
+[workspace]
+members = ["."]
+resolver = "2"
+
+[package]
+name = "sen-whisper"
+version = "0.1.0"
+edition = "2021"
+description = "Speech-to-text runtime for SenClaw: Whisper ASR (MLX on Apple Silicon, Candle CPU everywhere else), launched by the daemon and driven over loopback HTTP"
+license = "MIT"
+repository = "https://github.com/SenClaw/sen-whisper"
+
+[[bin]]
+name = "sen-whisper"
+path = "src/main.rs"
+
+[dependencies]
+sen-runtime-sdk = { path = "../senclaw/crates/sen-runtime-sdk" }
+
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.7", features = ["json"] }
+axum-extra = { version = "0.9", features = ["multipart"] }
+tower-http = { version = "0.5", features = ["fs", "cors"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+thiserror = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tokio-util = "0.7"
+futures-util = "0.3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+
+# ── Cross-platform ASR ────────────────────────────────────────────────────────
+# The audio front-end (decode any container -> mono f32 16 kHz -> log-mel) and
+# the Candle Whisper backend are pure Rust and build everywhere. They are what a
+# Windows or Linux build transcribes with, not a 501 stub.
+tokenizers = { version = "0.22", default-features = false, features = ["fancy-regex"] }
+symphonia = { version = "0.5", features = ["mp3", "aac", "isomp4", "alac", "flac", "wav", "ogg", "vorbis", "pcm", "adpcm"] }
+rubato = "0.15"
+realfft = "3.5"
+candle-core = "0.8"
+candle-nn = "0.8"
+candle-transformers = "0.8"
+
+# ── macOS only: the MLX runtime ───────────────────────────────────────────────
+# On Linux and Windows none of this is fetched, built or linked. The MLX
+# backend stays the macOS default (several times faster than the CPU path on
+# the same checkpoint); `SENCLAW_ASR_BACKEND=candle` forces Candle there too.
+[target.'cfg(target_os = "macos")'.dependencies]
+mlx-rs = { git = "https://github.com/oxiglade/mlx-rs", tag = "v0.25.3", features = ["metal", "accelerate"] }
+mlx-sys = { git = "https://github.com/oxiglade/mlx-rs", tag = "v0.25.3", package = "mlx-sys" }
+half = "2.4"
+safetensors = "0.4"
+libc = "0.2"
+flate2 = "1"
+
+[dev-dependencies]
+tempfile = "3"
+tower = { version = "0.5", features = ["util"] }
+
+# Cargo's debuginfo for build-script units (bindgen inside `mlx-sys`, in
+# particular) is otherwise decided per-invocation-kind rather than per-profile,
+# so `cargo build` and `cargo test`/`check` can fingerprint the same
+# build-script differently and each trigger their own from-scratch rebuild of
+# the whole MLX C++ core. Pinning it off makes the fingerprint stable across
+# `build`/`check`/`test` so one compiled `mlx-sys` is reused by all three.
+[profile.dev.build-override]
+debug = false

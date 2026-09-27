@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "sen-whisper",
+  "name": "SenClaw Whisper",
+  "version": "0.1.0",
+  "description": "Speech-to-text runtime for SenClaw: Whisper ASR (MLX on Apple Silicon)",
+  "type": "asr",
+  "slots": ["asr"],
+  "capabilities": ["asr"],
+  "platforms": ["darwin-arm64"],
+  "accelerator": "metal",
+  "mode": "service",
+  "entry": {
+    "command": "bin/sen-whisper",
+    "args": ["serve", "--host", "{host}", "--port", "{port}"],
+    "env": {}
+  },
+  "health": { "path": "/health", "startupTimeoutSecs": 60 },
+  "idleTimeoutSecs": 0,
+  "api": { "openaiBase": "/v1" },
+  "homepage": "https://github.com/SenClaw/sen-whisper",
+  "releaseNotesUrl": "https://github.com/SenClaw/sen-whisper/releases/tag/v0.1.0",
+  "license": "MIT"
+}

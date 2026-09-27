@@ -1,0 +1,8 @@
+[env]
+# Same hazard as sen-mlx (see that repo's .cargo/config.toml): MLX's Metal
+# command queue is not safe for concurrent dispatch from multiple OS threads
+# within one process, and the engine's own serial lock covers only the
+# load/generate path, not a unit test that builds an MLX graph directly.
+# Forcing single-threaded test execution here means a plain `cargo test` is
+# safe without every caller having to remember `--test-threads=1`.
+RUST_TEST_THREADS = "1"
