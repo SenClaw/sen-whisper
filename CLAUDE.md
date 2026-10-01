@@ -30,7 +30,7 @@ Contract: [`../senclaw/docs/runtime-protocol.md`](../senclaw/docs/runtime-protoc
 ```bash
 cargo build --release                        # or `make build`
 cargo test                                   # or `make test` — see below
-make package                                 # dist/sen-whisper-<version>-darwin-arm64.tar.gz
+make package                                 # dist/sen-whisper-<version>-<platform>.tar.gz
 make run-dev
 ```
 

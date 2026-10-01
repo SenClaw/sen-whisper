@@ -79,6 +79,19 @@ fn catalog_get(id: &str) -> Option<&'static CatalogEntry> {
     CATALOG.iter().find(|e| e.id == id)
 }
 
+/// Whether this build's backend can open a catalog entry: the
+/// `mlx-community/*` serialization needs the MLX decoder, which only a macOS
+/// build has. Off macOS those entries would download a checkpoint Candle
+/// cannot load, so they are not offered there.
+fn offered_here(id: &str) -> bool {
+    cfg!(target_os = "macos") || !id.starts_with("mlx-community/")
+}
+
+/// The catalog entries this build can transcribe with.
+fn offered_catalog() -> impl Iterator<Item = &'static CatalogEntry> {
+    CATALOG.iter().filter(|e| offered_here(e.id))
+}
+
 pub fn safe_dirname(id: &str) -> String {
     id.replace('/', "__")
 }
@@ -230,7 +243,7 @@ fn downloads() -> &'static Mutex<HashMap<String, DownloadHandle>> {
 pub async fn list(State(state): State<Arc<AppState>>) -> Result<impl IntoResponse, ApiError> {
     let downloads = downloads().lock().unwrap();
     let mut models = Vec::new();
-    for e in CATALOG {
+    for e in offered_catalog() {
         let dir = installed_model_dir(&state.env, e.id);
         let download = downloads.get(e.id).map(|h| h.state.lock().unwrap().clone());
         models.push(json!({
@@ -400,7 +413,7 @@ pub fn selected_model(state: &AppState) -> Result<String, ApiError> {
     settings
         .model_id
         .clone()
-        .or_else(|| CATALOG.iter().map(|e| e.id.to_string()).find(|id| is_installed(&installed_model_dir(&state.env, id))))
+        .or_else(|| offered_catalog().map(|e| e.id.to_string()).find(|id| is_installed(&installed_model_dir(&state.env, id))))
         .ok_or_else(|| ApiError(StatusCode::BAD_REQUEST, "no Whisper model selected or installed".into()))
 }
 
@@ -502,6 +515,14 @@ async fn run_download(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn mlx_checkpoints_are_offered_only_where_the_mlx_decoder_exists() {
+        assert!(offered_here("openai/whisper-tiny"));
+        assert_eq!(offered_here("mlx-community/whisper-large-v3-turbo"), cfg!(target_os = "macos"));
+        assert!(offered_catalog().any(|e| e.id.starts_with("openai/")), "every build offers a checkpoint it can open");
+    }
+
     use super::*;
 
     #[test]

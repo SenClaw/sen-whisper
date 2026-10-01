@@ -12,9 +12,19 @@ permissions:
 
 jobs:
   build:
-    # darwin-arm64 only: this package ships the MLX-accelerated build, and
-    # macos-14 runners are Apple Silicon.
-    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Apple Silicon: the MLX build, packaged with its mlx.metallib.
+          - os: macos-14
+            platform: darwin-arm64
+          # Everywhere else: the pure-Rust Candle backend on the CPU.
+          - os: ubuntu-latest
+            platform: linux-x64
+          - os: windows-latest
+            platform: windows-x64
+    runs-on: ${{ matrix.os }}
     steps:
       - name: checkout sen-whisper
         uses: actions/checkout@v4
@@ -34,14 +44,17 @@ jobs:
 
       - name: build
         working-directory: sen-whisper
+        shell: bash
         run: make build PROFILE=release
 
       - name: test
         working-directory: sen-whisper
+        shell: bash
         run: make test
 
       - name: package
         working-directory: sen-whisper
+        shell: bash
         run: make package PROFILE=release
 
       - name: release

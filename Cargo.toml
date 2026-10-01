@@ -4,7 +4,7 @@ resolver = "2"
 
 [package]
 name = "sen-whisper"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Speech-to-text runtime for SenClaw: Whisper ASR (MLX on Apple Silicon, Candle CPU everywhere else), launched by the daemon and driven over loopback HTTP"
 license = "MIT"

@@ -21,10 +21,45 @@ OUT_DIR := $(if $(filter release,$(PROFILE)),release,debug)
 
 ID := sen-whisper
 VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
-# darwin-arm64 only for this package: the Candle backend builds cross-platform
-# (see src/candle_whisper.rs), but this phase ships the MLX-accelerated build
-# the manifest declares — a CPU-only package for other platforms is future work.
-PLATFORM := darwin-arm64
+# darwin-arm64 ships the MLX build (plus its mlx.metallib); every other
+# platform transcribes with the pure-Rust Candle backend on the CPU, which is
+# what `src/transcribe.rs` picks off macOS anyway.
+UNAME_S := $(shell uname -s)
+UNAME_M := $(shell uname -m)
+ifeq ($(UNAME_S),Darwin)
+  ifeq ($(UNAME_M),arm64)
+    PLATFORM := darwin-arm64
+  else
+    PLATFORM := darwin-x64
+  endif
+else ifeq ($(UNAME_S),Linux)
+  ifeq ($(UNAME_M),aarch64)
+    PLATFORM := linux-arm64
+  else
+    PLATFORM := linux-x64
+  endif
+else
+  PLATFORM := windows-x64
+endif
+
+# Windows executables carry `.exe`. The manifest's `bin/<id>` still finds
+# it: process creation on Windows appends `.exe` to an extensionless path.
+ifeq ($(PLATFORM),windows-x64)
+  EXE := .exe
+else
+  EXE :=
+endif
+
+# What the packaged manifest reports as its accelerator.
+ifeq ($(PLATFORM),darwin-arm64)
+  ACCELERATOR := metal
+else
+  ACCELERATOR := cpu
+endif
+
+# GNU `sha256sum` where it exists (Linux, Git Bash on Windows), else macOS's
+# `shasum`; both write the `shasum -c` format the protocol pins.
+SHA256 := $(shell command -v sha256sum >/dev/null 2>&1 && echo sha256sum || echo shasum -a 256)
 
 DIST := dist
 PKG_NAME := $(ID)-$(VERSION)-$(PLATFORM)
@@ -53,21 +88,23 @@ test:
 METALLIB = $(shell find $(CARGO_TARGET_DIR)/$(OUT_DIR)/build -path '*/out/build/lib/mlx.metallib' 2>/dev/null | xargs -I{} stat -f '%m %N' {} 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 
 package: build
-	@if [ -z "$(METALLIB)" ]; then \
+	@if [ "$(PLATFORM)" = "darwin-arm64" ] && [ -z "$(METALLIB)" ]; then \
 		echo "error: mlx.metallib not found under $(CARGO_TARGET_DIR)/$(OUT_DIR)/build/*/out/build/lib/ — the MLX build did not produce it" >&2; \
 		exit 1; \
 	fi
-	@echo "packaging with metallib: $(METALLIB)"
 	rm -rf "$(PKG_DIR)"
 	mkdir -p "$(PKG_DIR)/bin"
-	cp "$(CARGO_TARGET_DIR)/$(OUT_DIR)/sen-whisper" "$(PKG_DIR)/bin/sen-whisper"
-	cp "$(METALLIB)" "$(PKG_DIR)/bin/mlx.metallib"
-	cp senclaw-runtime.json "$(PKG_DIR)/senclaw-runtime.json"
+	cp "$(CARGO_TARGET_DIR)/$(OUT_DIR)/$(ID)$(EXE)" "$(PKG_DIR)/bin/$(ID)$(EXE)"
+	@if [ "$(PLATFORM)" = "darwin-arm64" ]; then \
+		echo "packaging with metallib: $(METALLIB)"; \
+		cp "$(METALLIB)" "$(PKG_DIR)/bin/mlx.metallib"; \
+	fi
+	sed 's/"accelerator": "[^"]*"/"accelerator": "$(ACCELERATOR)"/' senclaw-runtime.json > "$(PKG_DIR)/senclaw-runtime.json"
 	mkdir -p $(DIST)
 	tar -C $(DIST) -czf "$(ARCHIVE)" "$(PKG_NAME)"
 	# `<hex>  <file name>`, the format `shasum -a 256 -c` reads — the same as every
 	# other runtime package, so one command verifies any of them.
-	cd $(DIST) && shasum -a 256 "$(notdir $(ARCHIVE))" > "$(notdir $(ARCHIVE)).sha256"
+	cd $(DIST) && $(SHA256) "$(notdir $(ARCHIVE))" > "$(notdir $(ARCHIVE)).sha256"
 	@echo "packaged $(ARCHIVE)"
 
 # `senclaw runtime install-local dist/<archive>` when a `senclaw` binary is on

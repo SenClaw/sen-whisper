@@ -11,17 +11,19 @@ Contract: [`senclaw/docs/runtime-protocol.md`](../senclaw/docs/runtime-protocol.
 
 ## Requirements
 
-- macOS, Apple Silicon (darwin-arm64) for the packaged build. Rust (stable),
-  Xcode command line tools (Metal, cmake) for the `mlx-sys` native build.
-- The Candle (CPU, pure Rust) backend in `src/candle_whisper.rs` builds on any
-  platform and is what a future non-macOS package would ship.
+- Packages for macOS Apple Silicon (`darwin-arm64`), Linux x64 and Windows x64. Rust (stable) everywhere.
+- macOS: Xcode command line tools (Metal, cmake) for the `mlx-sys` native build; the package ships the MLX
+  backend and its `mlx.metallib`.
+- Linux / Windows: nothing native — the package is the pure-Rust Candle backend (`src/candle_whisper.rs`) on
+  the CPU, and the model list offers the `openai/whisper-*` checkpoints it reads (the `mlx-community/*` ones
+  are macOS-only).
 
 ## Build
 
 ```bash
 make build                    # cargo build --release
 make test                     # cargo test (single-threaded — see CLAUDE.md)
-make package                  # dist/sen-whisper-<version>-darwin-arm64.tar.gz + .sha256
+make package                  # dist/sen-whisper-<version>-<platform>.tar.gz + .sha256
 ```
 
 Share `CARGO_TARGET_DIR` with a `sen-mlx` checkout while developing both: they
